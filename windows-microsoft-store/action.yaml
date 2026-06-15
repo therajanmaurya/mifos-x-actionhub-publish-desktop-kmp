@@ -1,19 +1,67 @@
-# Sub-action: windows-microsoft-store
-# Part of openMF/mifos-x-actionhub-publish-desktop-kmp@v2.0.0
-#
-# STATUS: Stub — action.yaml + README skeleton placed. Implementation pending
-# (see plan-layer/active/actionhub-constellation-consolidation/PLAN.md Phase P3/P4/P5).
-#
-# Lift source documented in this repo's CHANGELOG.md.
-name: 'mifos-x-actionhub-publish-desktop-kmp — windows-microsoft-store (TODO)'
-description: 'TODO: replace with real implementation lifted from legacy actionhub repo.'
+# Sub-action: windows-microsoft-store — Submit MSIX to Microsoft Store
+# Lifted from openMF/mifos-x-actionhub-publish-desktop-app-kmp@v2.0.0 microsoft-store/
+name: 'KMP Publish Desktop — Microsoft Store (Partner Center submission)'
+description: 'Push an MSIX package to the Microsoft Store via the Partner Center submission API.'
 author: 'Mifos Initiative'
+branding: { icon: 'send', color: 'purple' }
+
+inputs:
+  msix_path:                       { required: true,  description: 'Path to the .msix or .msixbundle' }
+  ms_partner_center_tenant_id:     { required: true,  description: 'Partner Center tenant ID' }
+  ms_partner_center_client_id:     { required: true,  description: 'Partner Center client ID (Azure AD app)' }
+  ms_partner_center_client_secret: { required: true,  description: 'Partner Center client secret' }
+  ms_app_id:                       { required: true,  description: 'Microsoft Store app product ID' }
+  release_flight:                  { required: false, default: '', description: 'Optional flight name (empty → mainstream)' }
+
 runs:
   using: 'composite'
   steps:
-    - name: TODO — implement
-      shell: bash
+    - name: Verify input MSIX exists
+      shell: pwsh
+      env: { MSIX_PATH: '${{ inputs.msix_path }}' }
       run: |
-        echo "::error::Sub-action windows-microsoft-store is not yet implemented."
-        echo "See https://github.com/openMF/mifos-x-actionhub-publish-desktop-kmp/blob/main/CHANGELOG.md for lift source."
-        exit 1
+        if (-not (Test-Path $env:MSIX_PATH)) { throw "MSIX not found at $env:MSIX_PATH" }
+
+    - name: Acquire Partner Center access token
+      id: token
+      shell: pwsh
+      env:
+        TENANT_ID:     ${{ inputs.ms_partner_center_tenant_id }}
+        CLIENT_ID:     ${{ inputs.ms_partner_center_client_id }}
+        CLIENT_SECRET: ${{ inputs.ms_partner_center_client_secret }}
+      run: |
+        $body = @{
+          grant_type    = 'client_credentials'
+          client_id     = $env:CLIENT_ID
+          client_secret = $env:CLIENT_SECRET
+          resource      = 'https://manage.devcenter.microsoft.com'
+        }
+        $resp = Invoke-RestMethod -Method Post `
+          -Uri "https://login.microsoftonline.com/$env:TENANT_ID/oauth2/token" `
+          -Body $body
+        "::add-mask::$($resp.access_token)" | Write-Host
+        "ACCESS_TOKEN=$($resp.access_token)" >> $env:GITHUB_OUTPUT
+
+    - name: Submit MSIX to Partner Center
+      shell: pwsh
+      env:
+        ACCESS_TOKEN:   ${{ steps.token.outputs.ACCESS_TOKEN }}
+        APP_ID:         ${{ inputs.ms_app_id }}
+        MSIX_PATH:      ${{ inputs.msix_path }}
+        RELEASE_FLIGHT: ${{ inputs.release_flight }}
+      run: |
+        $headers = @{ Authorization = "Bearer $env:ACCESS_TOKEN" }
+        $endpoint = if ([string]::IsNullOrEmpty($env:RELEASE_FLIGHT)) {
+          "https://manage.devcenter.microsoft.com/v1.0/my/applications/$env:APP_ID/submissions"
+        } else {
+          "https://manage.devcenter.microsoft.com/v1.0/my/applications/$env:APP_ID/flights/$env:RELEASE_FLIGHT/submissions"
+        }
+        $submission = Invoke-RestMethod -Method Post -Uri $endpoint -Headers $headers
+        Write-Host "Submission created: $($submission.id)"
+        $uploadUrl = $submission.fileUploadUrl
+        Invoke-RestMethod -Method Put -Uri $uploadUrl `
+          -Headers @{ 'x-ms-blob-type' = 'BlockBlob' } `
+          -InFile $env:MSIX_PATH
+        $commitUrl = "$endpoint/$($submission.id)/commit"
+        Invoke-RestMethod -Method Post -Uri $commitUrl -Headers $headers
+        Write-Host "Submission $($submission.id) committed to Partner Center."

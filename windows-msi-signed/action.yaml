@@ -1,19 +1,76 @@
-# Sub-action: windows-msi-signed
-# Part of openMF/mifos-x-actionhub-publish-desktop-kmp@v2.0.0
-#
-# STATUS: Stub — action.yaml + README skeleton placed. Implementation pending
-# (see plan-layer/active/actionhub-constellation-consolidation/PLAN.md Phase P3/P4/P5).
-#
-# Lift source documented in this repo's CHANGELOG.md.
-name: 'mifos-x-actionhub-publish-desktop-kmp — windows-msi-signed (TODO)'
-description: 'TODO: replace with real implementation lifted from legacy actionhub repo.'
+# Sub-action: windows-msi-signed — Azure Trusted Signing for Windows MSI
+# Lifted from openMF/mifos-x-actionhub-publish-desktop-app-kmp@v2.0.0 msi-signed/
+# Extended to also handle build + upload + stage flag flip (legacy only signed).
+name: 'KMP Publish Desktop — Windows MSI (Azure Trusted Signing)'
+description: 'Build Windows MSI, sign via Azure Trusted Signing, upload to GH Release, apply stage flags.'
 author: 'Mifos Initiative'
+branding: { icon: 'shield', color: 'purple' }
+
+inputs:
+  desktop_package_name:           { required: true,  description: 'Desktop module name' }
+  flavor:                         { required: false, default: 'prod', description: 'Gradle flavor' }
+  github_tag:                     { required: true,  description: 'GH Release tag' }
+  stage:                          { required: false, default: 'stable', description: 'prerelease | beta | stable' }
+  azure_ts_tenant_id:             { required: true,  description: 'Azure tenant ID' }
+  azure_ts_client_id:             { required: true,  description: 'Azure client ID' }
+  azure_ts_client_secret:         { required: true,  description: 'Azure client secret' }
+  azure_ts_endpoint:              { required: true,  description: 'Trusted Signing endpoint URL' }
+  trusted_signing_account_name:   { required: true,  description: 'Trusted Signing account name' }
+  certificate_profile_name:       { required: true,  description: 'Certificate profile name' }
+  java-version:                   { required: false, default: '17', description: 'JDK version' }
+
 runs:
   using: 'composite'
   steps:
-    - name: TODO — implement
+    - uses: actions/setup-java@v4
+      with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
+
+    - name: Build MSI
       shell: bash
+      env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
+      run: ./gradlew ":$PKG:packageReleaseMsi" "-PflavorDimension=$FLAVOR"
+
+    - name: Locate MSI
+      id: locate
+      shell: bash
+      env: { PKG: '${{ inputs.desktop_package_name }}' }
       run: |
-        echo "::error::Sub-action windows-msi-signed is not yet implemented."
-        echo "See https://github.com/openMF/mifos-x-actionhub-publish-desktop-kmp/blob/main/CHANGELOG.md for lift source."
-        exit 1
+        MSI=$(find "$PKG/build/compose/binaries/main-release/msi" -name '*.msi' -type f | head -1)
+        [[ -f "$MSI" ]] || { echo "::error::MSI not found"; exit 1; }
+        echo "msi_dir=$(dirname "$MSI")" >> "$GITHUB_OUTPUT"
+        echo "msi_path=$MSI"             >> "$GITHUB_OUTPUT"
+
+    - name: Sign MSI via Azure Trusted Signing
+      uses: azure/trusted-signing-action@v0.5.0
+      with:
+        azure-tenant-id:                ${{ inputs.azure_ts_tenant_id }}
+        azure-client-id:                ${{ inputs.azure_ts_client_id }}
+        azure-client-secret:            ${{ inputs.azure_ts_client_secret }}
+        endpoint:                       ${{ inputs.azure_ts_endpoint }}
+        trusted-signing-account-name:   ${{ inputs.trusted_signing_account_name }}
+        certificate-profile-name:       ${{ inputs.certificate_profile_name }}
+        files-folder:                   ${{ steps.locate.outputs.msi_dir }}
+        files-folder-filter:            msi
+        file-digest:                    SHA256
+        timestamp-rfc3161:              http://timestamp.acs.microsoft.com
+        timestamp-digest:               SHA256
+
+    - name: Verify signature
+      shell: pwsh
+      env: { MSI_PATH: '${{ steps.locate.outputs.msi_path }}' }
+      run: |
+        $sig = Get-AuthenticodeSignature $env:MSI_PATH
+        if ($sig.Status -ne 'Valid') { throw "Signature invalid: $($sig.Status)" }
+        Write-Host "Signature valid: $($sig.SignerCertificate.Subject)"
+
+    - name: Upload to GH Release + apply stage flags
+      shell: bash
+      env:
+        TAG:               ${{ inputs.github_tag }}
+        STAGE:             ${{ inputs.stage }}
+        MSI:               ${{ steps.locate.outputs.msi_path }}
+        GH_TOKEN:          ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        gh release upload "$TAG" "$MSI" --clobber
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"

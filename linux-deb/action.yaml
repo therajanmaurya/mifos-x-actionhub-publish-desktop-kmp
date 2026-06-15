@@ -1,19 +1,41 @@
-# Sub-action: linux-deb
-# Part of openMF/mifos-x-actionhub-publish-desktop-kmp@v2.0.0
-#
-# STATUS: Stub — action.yaml + README skeleton placed. Implementation pending
-# (see plan-layer/active/actionhub-constellation-consolidation/PLAN.md Phase P3/P4/P5).
-#
-# Lift source documented in this repo's CHANGELOG.md.
-name: 'mifos-x-actionhub-publish-desktop-kmp — linux-deb (TODO)'
-description: 'TODO: replace with real implementation lifted from legacy actionhub repo.'
+# Sub-action: linux-deb — Linux DEB package → GitHub Release
+# 🆕 NEW. Was inline `script.sh` in kmp-project-template/deployment/desktop/linux-deb/.
+# Runs on ubuntu-latest. Builds via packageReleaseDeb, uploads to GH Release,
+# applies stage flags.
+name: 'KMP Publish Desktop — Linux DEB'
+description: 'Build Compose Desktop Linux DEB package + upload to GitHub Release with stage flag flip.'
 author: 'Mifos Initiative'
+branding: { icon: 'upload', color: 'orange' }
+
+inputs:
+  desktop_package_name: { required: true,  description: 'Desktop module name' }
+  flavor:               { required: false, default: 'prod', description: 'Gradle flavor' }
+  github_tag:           { required: true,  description: 'GH Release tag' }
+  stage:                { required: false, default: 'stable', description: 'prerelease | beta | stable' }
+  java-version:         { required: false, default: '17',   description: 'JDK version' }
+
 runs:
   using: 'composite'
   steps:
-    - name: TODO — implement
+    - uses: actions/setup-java@v4
+      with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
+
+    - name: Build DEB
       shell: bash
+      env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
+      run: ./gradlew ":$PKG:packageReleaseDeb" "-PflavorDimension=$FLAVOR"
+
+    - name: Locate + upload + apply stage flags
+      shell: bash
+      env:
+        PKG:               ${{ inputs.desktop_package_name }}
+        TAG:               ${{ inputs.github_tag }}
+        STAGE:             ${{ inputs.stage }}
+        GH_TOKEN:          ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
-        echo "::error::Sub-action linux-deb is not yet implemented."
-        echo "See https://github.com/openMF/mifos-x-actionhub-publish-desktop-kmp/blob/main/CHANGELOG.md for lift source."
-        exit 1
+        set -euo pipefail
+        DEB=$(find "$PKG/build/compose/binaries/main-release/deb" -name '*.deb' -type f | head -1)
+        [[ -f "$DEB" ]] || { echo "::error::DEB not found"; exit 1; }
+        gh release upload "$TAG" "$DEB" --clobber
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"
