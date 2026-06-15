@@ -1,0 +1,39 @@
+# Sub-action: build — Compose Desktop build (Windows + Linux)
+# Part of openMF/mifos-x-actionhub-publish-desktop-kmp@v2.0.0
+#
+# Lifted from openMF/mifos-x-actionhub-build-desktop-app-kmp@v1.0.1.
+# Builds via `packageReleaseDistributionForCurrentOS` — the runner's OS picks
+# the target format (EXE/MSI on Windows, DEB on Linux).
+name: 'KMP Publish Desktop — Build'
+description: 'Build Compose Desktop distributable for the current OS (Windows EXE/MSI, Linux DEB).'
+author: 'Mifos Initiative'
+branding: { icon: 'package', color: 'blue' }
+
+inputs:
+  desktop_package_name: { required: true,  description: 'Desktop module name (e.g. cmp-desktop)' }
+  flavor:               { required: false, default: 'prod', description: 'Gradle flavor' }
+  java-version:         { required: false, default: '17',   description: 'JDK version' }
+
+outputs:
+  artifact_dir:
+    description: 'Path to the build output directory'
+    value: ${{ steps.locate.outputs.artifact_dir }}
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-java@v4
+      with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
+
+    - uses: gradle/actions/setup-gradle@v3
+
+    - name: Build distributable for current OS
+      shell: bash
+      env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
+      run: ./gradlew ":$PKG:packageReleaseDistributionForCurrentOS" "-PflavorDimension=$FLAVOR"
+
+    - name: Locate output dir
+      id: locate
+      shell: bash
+      env: { PKG: '${{ inputs.desktop_package_name }}' }
+      run: echo "artifact_dir=$PKG/build/compose/binaries/main-release" >> "$GITHUB_OUTPUT"
