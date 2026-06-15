@@ -1,5 +1,9 @@
 # mifos-x-actionhub-publish-desktop-kmp
 
+[![Release](https://img.shields.io/github/v/release/therajanmaurya/mifos-x-actionhub-publish-desktop-kmp?label=release&logo=github)](https://github.com/therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/releases/latest)
+[![PR Check](https://github.com/therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/actions/workflows/pr-check.yaml/badge.svg)](https://github.com/therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/actions/workflows/pr-check.yaml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
+
 > Composite GitHub Actions for KMP **Desktop (Windows + Linux only)**: EXE, MSI (Azure Trusted Signing), Microsoft Store, DEB. macOS desktop targets live in [`mifos-x-actionhub-publish-apple-kmp`](https://github.com/openMF/mifos-x-actionhub-publish-apple-kmp) since they share Apple Dev Program infrastructure.
 
 ## Why Windows + Linux only
