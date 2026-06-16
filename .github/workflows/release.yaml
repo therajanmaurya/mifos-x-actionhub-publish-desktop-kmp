@@ -10,6 +10,7 @@
 #
 # Stage 1 builds + uploads. Stages 2-3 promote = flip flags only (no rebuild).
 name: Release · Desktop (Win/Linux ladder)
+run-name: "🖥️ Release Desktop ${{ inputs.target }} ${{ inputs.github_tag }} · ladder→${{ inputs.starting_rung }}"
 
 on:
   workflow_call:
@@ -47,8 +48,61 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Preflight: validate required secrets per target — fail-fast in ~8s instead of
+  # dying deep in the build after 5+ min. linux-deb needs nothing; Windows signed
+  # targets need Azure Trusted Signing; microsoft-store also needs Partner Center creds.
+  validate-secrets:
+    name: Preflight · Validate required secrets
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check desktop secrets per target
+        env:
+          azure_client_id:                ${{ secrets.azure_client_id }}
+          azure_tenant_id:                ${{ secrets.azure_tenant_id }}
+          azure_subscription_id:          ${{ secrets.azure_subscription_id }}
+          azure_trusted_signing_endpoint: ${{ secrets.azure_trusted_signing_endpoint }}
+          azure_trusted_signing_account:  ${{ secrets.azure_trusted_signing_account }}
+          azure_cert_profile_name:        ${{ secrets.azure_cert_profile_name }}
+          microsoft_store_client_id:      ${{ secrets.microsoft_store_client_id }}
+          microsoft_store_client_secret:  ${{ secrets.microsoft_store_client_secret }}
+        run: |
+          MISSING=()
+          case "${{ inputs.target }}" in
+            linux-deb)
+              echo "✅ linux-deb requires no secrets"
+              ;;
+            windows-msi-signed|windows-exe)
+              [[ -z "${azure_client_id:-}" ]]                && MISSING+=("azure_client_id")
+              [[ -z "${azure_tenant_id:-}" ]]                && MISSING+=("azure_tenant_id")
+              [[ -z "${azure_subscription_id:-}" ]]          && MISSING+=("azure_subscription_id")
+              [[ -z "${azure_trusted_signing_endpoint:-}" ]] && MISSING+=("azure_trusted_signing_endpoint")
+              [[ -z "${azure_trusted_signing_account:-}" ]]  && MISSING+=("azure_trusted_signing_account")
+              [[ -z "${azure_cert_profile_name:-}" ]]        && MISSING+=("azure_cert_profile_name")
+              ;;
+            windows-microsoft-store)
+              [[ -z "${azure_client_id:-}" ]]                && MISSING+=("azure_client_id")
+              [[ -z "${azure_tenant_id:-}" ]]                && MISSING+=("azure_tenant_id")
+              [[ -z "${azure_subscription_id:-}" ]]          && MISSING+=("azure_subscription_id")
+              [[ -z "${azure_trusted_signing_endpoint:-}" ]] && MISSING+=("azure_trusted_signing_endpoint")
+              [[ -z "${azure_trusted_signing_account:-}" ]]  && MISSING+=("azure_trusted_signing_account")
+              [[ -z "${azure_cert_profile_name:-}" ]]        && MISSING+=("azure_cert_profile_name")
+              [[ -z "${microsoft_store_client_id:-}" ]]      && MISSING+=("microsoft_store_client_id")
+              [[ -z "${microsoft_store_client_secret:-}" ]]  && MISSING+=("microsoft_store_client_secret")
+              ;;
+          esac
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "❌ Desktop target=${{ inputs.target }} requires these secrets, but they are MISSING:"
+            printf '   - %s\n' "${MISSING[@]}"
+            echo ""
+            echo "Set them in your repo's Settings → Secrets and variables → Actions:"
+            for s in "${MISSING[@]}"; do echo "   gh secret set $s --repo \${{ github.repository }}"; done
+            exit 1
+          fi
+          echo "✅ Desktop ${{ inputs.target }} secrets present"
+
   stage-1-prerelease:
     name: Stage 1 — Prerelease (build + upload + prerelease flag)
+    needs: [validate-secrets]
     if: contains(fromJSON('["prerelease","beta","stable"]'), inputs.starting_rung)
     runs-on: ${{ (inputs.target == 'linux-deb') && 'ubuntu-latest' || 'windows-latest' }}
     environment: desktop-${{ inputs.target }}-prerelease
