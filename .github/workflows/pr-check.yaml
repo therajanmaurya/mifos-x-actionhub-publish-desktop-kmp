@@ -41,3 +41,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: find _shared/scripts -name '*.sh' -exec shellcheck -S warning {} +
+
+  workflow-tests:
+    name: Workflow E2E tests (43 assertions)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: |
+          bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.4
+          sudo mv actionlint /usr/local/bin/
+          actionlint --version
+      - name: Install Python deps
+        run: pip install pyyaml
+      - name: Run workflow-tests.sh
+        run: bash tests/workflow-tests.sh
