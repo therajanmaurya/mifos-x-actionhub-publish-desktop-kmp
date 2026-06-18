@@ -186,13 +186,16 @@ for s in steps:
 expected = set([\"linux-deb\",\"windows-exe\",\"windows-msi-signed\",\"windows-microsoft-store\"])
 assert ref_targets == expected, \"target mismatch: \" + str(ref_targets.symmetric_difference(expected))
 '"
-run_test "T20: All references pinned to @v2.0.0 (composite-action stable tag)" "py '
+run_test "T20: All composite-action refs use a consistent version tag (Tier 9 T38 catches v2.0.0 freeze)" "py '
 import yaml
 d = yaml.safe_load(open(\".github/workflows/release.yaml\"))
 steps = d[\"jobs\"][\"stage-1-prerelease\"][\"steps\"]
+tags = set()
 for s in steps:
     if isinstance(s,dict) and \"publish-desktop-kmp/\" in str(s.get(\"uses\",\"\")):
-        assert s[\"uses\"].endswith(\"@v2.0.0\"), \"non-canonical ref: \" + s[\"uses\"]
+        tag = s[\"uses\"].split(\"@\")[-1]
+        tags.add(tag)
+assert len(tags) <= 1, \"stage-1 refs use INCONSISTENT tags: \" + str(sorted(tags))
 '"
 echo
 
@@ -336,6 +339,30 @@ for action_yaml in glob.glob(\"**/action.yaml\", recursive=True):
         if isinstance(step, dict) and \"setup-ruby\" in str(step.get(\"uses\", \"\")):
             w = step.get(\"with\", {})
             assert w.get(\"bundler-cache\") in [True, \"true\"], action_yaml + \" — setup-ruby missing bundler-cache:true\"
+'"
+echo
+
+# ── Tier 10: composite-action self-pin consistency (preventive) ──────────────
+#
+# Catches the architectural anti-pattern where release.yaml self-pins
+# composite-action subdirs at the OLDEST tag and never updates the references
+# even when subsequent releases change action.yaml. Caused publish-android-kmp
+# + publish-apple-kmp v2.0.6/v2.0.7 fixes to be silently ineffective. This
+# repo doesn't have the bug today (composite actions are unchanged from v2.0.0),
+# but the test prevents it from being introduced.
+echo "── Tier 10: composite-action self-pin consistency (preventive) ──"
+run_test "T38: all composite-action 'uses:' refs in release.yaml use consistent tags + no v2.0.0 freeze when action.yaml changes" "python3 -c '
+import re, sys
+with open(\".github/workflows/release.yaml\") as f:
+    content = f.read()
+pat = re.compile(r\"uses:\\s+therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/[^/]+@(v[0-9.]+)\")
+tags = set(pat.findall(content))
+if len(tags) > 1:
+    print(\"FAIL — composite-action refs use INCONSISTENT tags: \" + str(sorted(tags)))
+    sys.exit(1)
+# Preventive — desktop composite actions are unchanged since v2.0.0; if/when they
+# are modified, the v2.0.0 reference must be bumped. T38 then becomes a FAIL signal.
+print(\"OK — composite-action refs consistent at \" + (list(tags)[0] if tags else \"(no refs)\"))
 '"
 echo
 
