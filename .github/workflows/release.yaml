@@ -100,6 +100,17 @@ jobs:
           fi
           echo "✅ Desktop ${{ inputs.target }} secrets present"
 
+  # ---------------------------------------------------------------------------
+  # Per-target static-uses pattern (since v2.0.6):
+  # GitHub Actions does NOT permit expression interpolation inside `uses:` — the
+  # value must resolve to a literal at workflow parse time. The previous
+  # `uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/${{ inputs.target }}@v2.0.0`
+  # form was rejected by the parser with:
+  #   "context 'inputs' is not allowed here. no context is available here."
+  # Replaced with one static-uses step per target, gated by `if: inputs.target == '…'`.
+  # Only the matching step actually runs per dispatch. Mirror of the publish-web-kmp
+  # v2.0.6 fix (PR #3 on that repo).
+  # ---------------------------------------------------------------------------
   stage-1-prerelease:
     name: Stage 1 — Prerelease (build + upload + prerelease flag)
     needs: [validate-secrets]
@@ -108,8 +119,34 @@ jobs:
     environment: desktop-${{ inputs.target }}-prerelease
     steps:
       - uses: actions/checkout@v4
-      - name: Build + sign + upload (per target)
-        uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/${{ inputs.target }}@v2.0.0
+
+      - name: Build + sign + upload (linux-deb)
+        if: inputs.target == 'linux-deb'
+        uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/linux-deb@v2.0.0
+        with:
+          desktop_package_name: ${{ inputs.desktop_package_name }}
+          github_tag:           ${{ inputs.github_tag }}
+          stage:                prerelease
+
+      - name: Build + sign + upload (windows-exe)
+        if: inputs.target == 'windows-exe'
+        uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/windows-exe@v2.0.0
+        with:
+          desktop_package_name: ${{ inputs.desktop_package_name }}
+          github_tag:           ${{ inputs.github_tag }}
+          stage:                prerelease
+
+      - name: Build + sign + upload (windows-msi-signed)
+        if: inputs.target == 'windows-msi-signed'
+        uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/windows-msi-signed@v2.0.0
+        with:
+          desktop_package_name: ${{ inputs.desktop_package_name }}
+          github_tag:           ${{ inputs.github_tag }}
+          stage:                prerelease
+
+      - name: Build + sign + upload (windows-microsoft-store)
+        if: inputs.target == 'windows-microsoft-store'
+        uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/windows-microsoft-store@v2.0.0
         with:
           desktop_package_name: ${{ inputs.desktop_package_name }}
           github_tag:           ${{ inputs.github_tag }}
