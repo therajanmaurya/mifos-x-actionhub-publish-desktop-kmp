@@ -291,6 +291,54 @@ assert any(\"gh release edit\" in r and \"--latest=true\" in r for r in runs), \
 '"
 echo
 
+# ── Tier 9: Runtime bug-class regressions (preventive) ───────────────────────
+#
+# Mirrors the regression tests added to publish-android-kmp v2.0.6 + publish-
+# apple-kmp v2.0.6 after the firebase-distribution gem-write bug. This repo
+# doesn't use fastlane or gem install today, but the tests prevent the bug
+# class from being introduced in any future composite action.
+echo "── Tier 9: Runtime bug-class regressions (preventive) ──"
+run_test "T38: No bare gem-write commands (must be sudo or bundle-exec-prefixed)" "python3 -c '
+import re, glob
+BARE_PATTERNS = [
+    re.compile(r\"^\\s+(?:run:\\s*)?(?:gem install|bundle install|fastlane add_plugin|gem update)(?:\\s|$)\"),
+    re.compile(r\"^\\s+(?:run:\\s*\\|)?\\s*(gem install|bundle install|fastlane add_plugin|gem update)(?:\\s|$)\"),
+]
+SAFE_PREFIXES = (\"sudo \", \"bundle exec \", \"sudo bundle\", \"DEBIAN_FRONTEND=\")
+violations = []
+for action_yaml in glob.glob(\"**/action.yaml\", recursive=True):
+    if \"/_shared/\" in action_yaml or \"/examples/\" in action_yaml:
+        continue
+    with open(action_yaml) as f:
+        for line_num, line in enumerate(f, 1):
+            stripped = line.strip()
+            if stripped.startswith(\"#\"):
+                continue
+            for pat in BARE_PATTERNS:
+                m = pat.match(line)
+                if m and not any(p in line for p in SAFE_PREFIXES):
+                    violations.append(f\"{action_yaml}:{line_num}  {stripped[:80]}\")
+if violations:
+    print(\"FAIL — bare gem-write commands found:\")
+    for v in violations: print(f\"  {v}\")
+    exit(1)
+print(\"OK — no bare gem-write commands\")
+'"
+run_test "T39: ruby/setup-ruby steps use bundler-cache:true (gem cache enabled — preventive)" "py '
+import yaml, glob
+for action_yaml in glob.glob(\"**/action.yaml\", recursive=True):
+    if \"/_shared/\" in action_yaml or \"/examples/\" in action_yaml:
+        continue
+    d = yaml.safe_load(open(action_yaml))
+    if not d or \"runs\" not in d or \"steps\" not in d[\"runs\"]:
+        continue
+    for step in d[\"runs\"][\"steps\"]:
+        if isinstance(step, dict) and \"setup-ruby\" in str(step.get(\"uses\", \"\")):
+            w = step.get(\"with\", {})
+            assert w.get(\"bundler-cache\") in [True, \"true\"], action_yaml + \" — setup-ruby missing bundler-cache:true\"
+'"
+echo
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Summary
 # ─────────────────────────────────────────────────────────────────────────────
