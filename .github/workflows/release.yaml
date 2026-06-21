@@ -117,6 +117,8 @@ jobs:
     if: contains(fromJSON('["prerelease","beta","stable"]'), inputs.starting_rung)
     runs-on: ${{ (inputs.target == 'linux-deb') && 'ubuntu-latest' || 'windows-latest' }}
     environment: desktop-${{ inputs.target }}-prerelease
+    permissions:
+      contents: write   # required for GH Release artifact upload (EXE/MSI/DEB)
     steps:
       - uses: actions/checkout@v4
 
