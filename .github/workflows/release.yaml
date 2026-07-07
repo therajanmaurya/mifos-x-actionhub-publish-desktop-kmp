@@ -34,14 +34,23 @@ on:
         default: 'prerelease'
 
     secrets:
+      # Windows EXE/MSI signing via Azure Trusted Signing (windows-exe is unsigned →
+      # does not consume these; windows-msi-signed does).
       azure_client_id:                       { required: false }
       azure_tenant_id:                       { required: false }
       azure_subscription_id:                 { required: false }
       azure_trusted_signing_endpoint:        { required: false }
       azure_trusted_signing_account:         { required: false }
       azure_cert_profile_name:               { required: false }
-      microsoft_store_client_id:             { required: false }
-      microsoft_store_client_secret:         { required: false }
+      # Microsoft Store (windows-microsoft-store): MSIX identity + Partner Center
+      # submission-API creds. The Store re-signs the MSIX — no Azure needed here.
+      ms_app_id:                             { required: false }
+      ms_partner_center_tenant_id:           { required: false }
+      ms_partner_center_client_id:           { required: false }
+      ms_partner_center_client_secret:       { required: false }
+      windows_msix_identity_name:            { required: false }
+      windows_msix_publisher:                { required: false }
+      windows_msix_publisher_display_name:   { required: false }
 
 concurrency:
   group: release-desktop-${{ inputs.target }}
@@ -63,15 +72,21 @@ jobs:
           azure_trusted_signing_endpoint: ${{ secrets.azure_trusted_signing_endpoint }}
           azure_trusted_signing_account:  ${{ secrets.azure_trusted_signing_account }}
           azure_cert_profile_name:        ${{ secrets.azure_cert_profile_name }}
-          microsoft_store_client_id:      ${{ secrets.microsoft_store_client_id }}
-          microsoft_store_client_secret:  ${{ secrets.microsoft_store_client_secret }}
+          ms_app_id:                          ${{ secrets.ms_app_id }}
+          ms_partner_center_tenant_id:        ${{ secrets.ms_partner_center_tenant_id }}
+          ms_partner_center_client_id:        ${{ secrets.ms_partner_center_client_id }}
+          ms_partner_center_client_secret:    ${{ secrets.ms_partner_center_client_secret }}
+          windows_msix_identity_name:         ${{ secrets.windows_msix_identity_name }}
+          windows_msix_publisher:             ${{ secrets.windows_msix_publisher }}
+          windows_msix_publisher_display_name: ${{ secrets.windows_msix_publisher_display_name }}
         run: |
           MISSING=()
           case "${{ inputs.target }}" in
-            linux-deb)
-              echo "✅ linux-deb requires no secrets"
+            linux-deb|windows-exe)
+              # linux-deb + unsigned windows-exe ship to GitHub Releases with no secrets.
+              echo "✅ ${{ inputs.target }} requires no secrets"
               ;;
-            windows-msi-signed|windows-exe)
+            windows-msi-signed)
               [[ -z "${azure_client_id:-}" ]]                && MISSING+=("azure_client_id")
               [[ -z "${azure_tenant_id:-}" ]]                && MISSING+=("azure_tenant_id")
               [[ -z "${azure_subscription_id:-}" ]]          && MISSING+=("azure_subscription_id")
@@ -80,14 +95,14 @@ jobs:
               [[ -z "${azure_cert_profile_name:-}" ]]        && MISSING+=("azure_cert_profile_name")
               ;;
             windows-microsoft-store)
-              [[ -z "${azure_client_id:-}" ]]                && MISSING+=("azure_client_id")
-              [[ -z "${azure_tenant_id:-}" ]]                && MISSING+=("azure_tenant_id")
-              [[ -z "${azure_subscription_id:-}" ]]          && MISSING+=("azure_subscription_id")
-              [[ -z "${azure_trusted_signing_endpoint:-}" ]] && MISSING+=("azure_trusted_signing_endpoint")
-              [[ -z "${azure_trusted_signing_account:-}" ]]  && MISSING+=("azure_trusted_signing_account")
-              [[ -z "${azure_cert_profile_name:-}" ]]        && MISSING+=("azure_cert_profile_name")
-              [[ -z "${microsoft_store_client_id:-}" ]]      && MISSING+=("microsoft_store_client_id")
-              [[ -z "${microsoft_store_client_secret:-}" ]]  && MISSING+=("microsoft_store_client_secret")
+              # MSIX → Store: Store re-signs, so NO Azure. Needs identity + Partner Center creds.
+              [[ -z "${ms_app_id:-}" ]]                          && MISSING+=("ms_app_id")
+              [[ -z "${ms_partner_center_tenant_id:-}" ]]        && MISSING+=("ms_partner_center_tenant_id")
+              [[ -z "${ms_partner_center_client_id:-}" ]]        && MISSING+=("ms_partner_center_client_id")
+              [[ -z "${ms_partner_center_client_secret:-}" ]]    && MISSING+=("ms_partner_center_client_secret")
+              [[ -z "${windows_msix_identity_name:-}" ]]         && MISSING+=("windows_msix_identity_name")
+              [[ -z "${windows_msix_publisher:-}" ]]             && MISSING+=("windows_msix_publisher")
+              [[ -z "${windows_msix_publisher_display_name:-}" ]] && MISSING+=("windows_msix_publisher_display_name")
               ;;
           esac
           if [[ ${#MISSING[@]} -gt 0 ]]; then
@@ -146,13 +161,18 @@ jobs:
           github_tag:           ${{ inputs.github_tag }}
           stage:                prerelease
 
-      - name: Build + sign + upload (windows-microsoft-store)
+      - name: Build MSIX + submit to Store (windows-microsoft-store)
         if: inputs.target == 'windows-microsoft-store'
         uses: therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/windows-microsoft-store@v2.0.0
         with:
-          desktop_package_name: ${{ inputs.desktop_package_name }}
-          github_tag:           ${{ inputs.github_tag }}
-          stage:                prerelease
+          desktop_package_name:                ${{ inputs.desktop_package_name }}
+          windows_msix_identity_name:          ${{ secrets.windows_msix_identity_name }}
+          windows_msix_publisher:              ${{ secrets.windows_msix_publisher }}
+          windows_msix_publisher_display_name: ${{ secrets.windows_msix_publisher_display_name }}
+          ms_app_id:                           ${{ secrets.ms_app_id }}
+          ms_partner_center_tenant_id:         ${{ secrets.ms_partner_center_tenant_id }}
+          ms_partner_center_client_id:         ${{ secrets.ms_partner_center_client_id }}
+          ms_partner_center_client_secret:     ${{ secrets.ms_partner_center_client_secret }}
 
   stage-2-promote-to-beta:
     name: Stage 2 — Promote to Beta (no rebuild — flip GH Release flags)
