@@ -1,26 +1,71 @@
-# Sub-action: windows-microsoft-store — Submit MSIX to Microsoft Store
-# Lifted from openMF/mifos-x-actionhub-publish-desktop-app-kmp@v2.0.0 microsoft-store/
-name: 'KMP Publish Desktop — Microsoft Store (Partner Center submission)'
-description: 'Push an MSIX package to the Microsoft Store via the Partner Center submission API.'
+# Sub-action: windows-microsoft-store — build MSIX + submit to Microsoft Store
+# The Store re-signs the MSIX, so NO code-signing cert / Azure Trusted Signing is
+# needed — only the Partner Center developer account + submission-API creds.
+# Compose Desktop emits no MSIX, so this action packages one (build-msix.ps1) from
+# the createReleaseDistributable app image + the vault-managed identity values, then
+# submits it via the Partner Center submission API.
+name: 'KMP Publish Desktop — Microsoft Store (build MSIX + Partner Center submission)'
+description: 'Package a Compose Desktop app image as MSIX and submit it to the Microsoft Store via Partner Center.'
 author: 'Mifos Initiative'
 branding: { icon: 'send', color: 'purple' }
 
 inputs:
-  msix_path:                       { required: true,  description: 'Path to the .msix or .msixbundle' }
-  ms_partner_center_tenant_id:     { required: true,  description: 'Partner Center tenant ID' }
-  ms_partner_center_client_id:     { required: true,  description: 'Partner Center client ID (Azure AD app)' }
-  ms_partner_center_client_secret: { required: true,  description: 'Partner Center client secret' }
-  ms_app_id:                       { required: true,  description: 'Microsoft Store app product ID' }
+  desktop_package_name:            { required: true,  description: 'Gradle desktop module (e.g. cmp-desktop)' }
+  flavor:                          { required: false, default: 'prod', description: 'Gradle flavor' }
+  version:                         { required: false, default: '', description: 'App version (auto from versionFile when empty); sanitized to MSIX a.b.c.0' }
+  icon_path:                       { required: false, default: 'cmp-desktop/icons/ic_launcher.png', description: 'Square source PNG for MSIX tile assets' }
+  # MSIX identity — MUST match the Partner Center reservation (vault: windows_msix_*).
+  windows_msix_identity_name:      { required: true,  description: 'Package/Identity/Name' }
+  windows_msix_publisher:          { required: true,  description: 'Package/Identity/Publisher (CN=...)' }
+  windows_msix_publisher_display_name: { required: true, description: 'Package/Properties/PublisherDisplayName' }
+  # Partner Center submission API (vault: ms_partner_center_* + ms_app_id).
+  ms_partner_center_tenant_id:     { required: true,  description: 'Partner Center AAD tenant ID' }
+  ms_partner_center_client_id:     { required: true,  description: 'Partner Center AAD client ID' }
+  ms_partner_center_client_secret: { required: true,  description: 'Partner Center AAD client secret' }
+  ms_app_id:                       { required: true,  description: 'Microsoft Store app product ID (Store ID)' }
   release_flight:                  { required: false, default: '', description: 'Optional flight name (empty → mainstream)' }
+  java-version:                    { required: false, default: '17', description: 'JDK version' }
 
 runs:
   using: 'composite'
   steps:
-    - name: Verify input MSIX exists
-      shell: pwsh
-      env: { MSIX_PATH: '${{ inputs.msix_path }}' }
+    - uses: actions/setup-java@v4
+      with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
+
+    - name: Build release distributable (app image)
+      shell: bash
+      env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
+      run: ./gradlew ":$PKG:createReleaseDistributable" "-PflavorDimension=$FLAVOR"
+
+    - name: Locate app image + sanitize version
+      id: img
+      shell: bash
+      env: { PKG: '${{ inputs.desktop_package_name }}', VERSION_IN: '${{ inputs.version }}' }
       run: |
-        if (-not (Test-Path $env:MSIX_PATH)) { throw "MSIX not found at $env:MSIX_PATH" }
+        set -euo pipefail
+        APPDIR=$(find "$PKG/build/compose/binaries/main-release/app" -mindepth 1 -maxdepth 1 -type d | head -1)
+        [[ -d "$APPDIR" ]] || { echo "::error::app image dir not found"; exit 1; }
+        echo "app_dir=$APPDIR" >> "$GITHUB_OUTPUT"
+        echo "display_name=$(basename "$APPDIR")" >> "$GITHUB_OUTPUT"
+        # MSIX version must be 4-part numeric a.b.c.0 — strip any -beta.N+sha suffix.
+        RAW="${VERSION_IN:-}"
+        if [[ -z "$RAW" && -f version.txt ]]; then RAW=$(cat version.txt); fi
+        NUM=$(echo "${RAW:-1.0.0}" | grep -oE '^[0-9]+\.[0-9]+\.[0-9]+' || echo "1.0.0")
+        echo "msix_version=${NUM}.0" >> "$GITHUB_OUTPUT"
+
+    - name: Package MSIX
+      shell: pwsh
+      run: |
+        ${{ github.action_path }}/../_shared/scripts/windows/build-msix.ps1 `
+          -AppImageDir          "${{ steps.img.outputs.app_dir }}" `
+          -IconPng              "${{ inputs.icon_path }}" `
+          -ManifestTemplate     "${{ github.action_path }}/AppxManifest.xml.template" `
+          -OutputMsix           "${{ runner.temp }}/app-store.msix" `
+          -IdentityName         "${{ inputs.windows_msix_identity_name }}" `
+          -Publisher            "${{ inputs.windows_msix_publisher }}" `
+          -PublisherDisplayName "${{ inputs.windows_msix_publisher_display_name }}" `
+          -DisplayName          "${{ steps.img.outputs.display_name }}" `
+          -Version              "${{ steps.img.outputs.msix_version }}"
 
     - name: Acquire Partner Center access token
       id: token
@@ -47,9 +92,10 @@ runs:
       env:
         ACCESS_TOKEN:   ${{ steps.token.outputs.ACCESS_TOKEN }}
         APP_ID:         ${{ inputs.ms_app_id }}
-        MSIX_PATH:      ${{ inputs.msix_path }}
+        MSIX_PATH:      ${{ runner.temp }}/app-store.msix
         RELEASE_FLIGHT: ${{ inputs.release_flight }}
       run: |
+        if (-not (Test-Path $env:MSIX_PATH)) { throw "MSIX not found at $env:MSIX_PATH" }
         $headers = @{ Authorization = "Bearer $env:ACCESS_TOKEN" }
         $endpoint = if ([string]::IsNullOrEmpty($env:RELEASE_FLIGHT)) {
           "https://manage.devcenter.microsoft.com/v1.0/my/applications/$env:APP_ID/submissions"
