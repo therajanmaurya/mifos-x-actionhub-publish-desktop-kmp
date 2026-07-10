@@ -30,7 +30,7 @@ runs:
     - name: Build distributable for current OS
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseDistributionForCurrentOS" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseDistributionForCurrentOS" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate output dir
       id: locate

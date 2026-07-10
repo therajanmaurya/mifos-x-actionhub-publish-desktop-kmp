@@ -28,7 +28,7 @@ runs:
     - name: Build MSI
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseMsi" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseMsi" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate MSI
       id: locate
