@@ -39,5 +39,6 @@ runs:
         set -euo pipefail
         EXE=$(find "$PKG/build/compose/binaries/main-release/exe" -name '*.exe' -type f | head -1)
         [[ -f "$EXE" ]] || { echo "::error::EXE not found"; exit 1; }
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-ensure.sh" "$TAG" "$STAGE"
         gh release upload "$TAG" "$EXE" --clobber
         bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"

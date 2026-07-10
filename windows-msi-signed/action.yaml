@@ -72,5 +72,6 @@ runs:
         GH_TOKEN:          ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-ensure.sh" "$TAG" "$STAGE"
         gh release upload "$TAG" "$MSI" --clobber
         bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"
