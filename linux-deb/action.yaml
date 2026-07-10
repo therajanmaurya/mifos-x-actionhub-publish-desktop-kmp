@@ -23,7 +23,7 @@ runs:
     - name: Build DEB
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseDeb" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseDeb" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate + upload + apply stage flags
       shell: bash

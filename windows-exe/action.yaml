@@ -25,7 +25,7 @@ runs:
     - name: Build EXE installer
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseExe" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseExe" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate + upload + apply stage flags
       shell: bash
