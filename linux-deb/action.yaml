@@ -37,5 +37,6 @@ runs:
         set -euo pipefail
         DEB=$(find "$PKG/build/compose/binaries/main-release/deb" -name '*.deb' -type f | head -1)
         [[ -f "$DEB" ]] || { echo "::error::DEB not found"; exit 1; }
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-ensure.sh" "$TAG" "$STAGE"
         gh release upload "$TAG" "$DEB" --clobber
         bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"
