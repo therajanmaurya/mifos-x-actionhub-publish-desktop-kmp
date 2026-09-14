@@ -22,10 +22,10 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v5
       with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
 
-    - uses: gradle/actions/setup-gradle@v3
+    - uses: gradle/actions/setup-gradle@v5
 
     - name: Build distributable for current OS
       shell: bash

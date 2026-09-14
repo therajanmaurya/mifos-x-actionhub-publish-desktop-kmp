@@ -11,7 +11,7 @@ jobs:
   actionlint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: docker://rhysd/actionlint:1.7.4
         with:
           args: -color
@@ -29,7 +29,7 @@ jobs:
           - windows-microsoft-store
           - linux-deb
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: |
           set -euo pipefail
           test -f "${{ matrix.subdir }}/action.yaml" || { echo "::error::Missing action.yaml"; exit 1; }
@@ -39,14 +39,14 @@ jobs:
   validate-shared:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: find _shared/scripts -name '*.sh' -exec shellcheck -S warning {} +
 
   workflow-tests:
     name: Workflow E2E tests (43 assertions)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install actionlint
         run: |
           bash <(curl https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.4

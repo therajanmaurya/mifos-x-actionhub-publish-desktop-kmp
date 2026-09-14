@@ -19,7 +19,7 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: actions/setup-java@v4
+    - uses: actions/setup-java@v5
       with: { distribution: zulu, java-version: '${{ inputs.java-version }}' }
 
     - name: Build EXE installer

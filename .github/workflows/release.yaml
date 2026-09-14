@@ -120,7 +120,7 @@ jobs:
     permissions:
       contents: write   # required for GH Release artifact upload (EXE/MSI/DEB)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Build + sign + upload (linux-deb)
         if: inputs.target == 'linux-deb'
@@ -161,7 +161,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: desktop-${{ inputs.target }}-beta
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Flip GH Release flags to beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -174,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: desktop-${{ inputs.target }}-stable
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Flip GH Release flags to stable
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
