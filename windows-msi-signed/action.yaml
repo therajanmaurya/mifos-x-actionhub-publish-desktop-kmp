@@ -28,7 +28,7 @@ runs:
     - name: Build MSI
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseMsi" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseMsi" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate MSI
       id: locate
@@ -72,5 +72,6 @@ runs:
         GH_TOKEN:          ${{ github.token }}
         GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-ensure.sh" "$TAG" "$STAGE"
         gh release upload "$TAG" "$MSI" --clobber
         bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"

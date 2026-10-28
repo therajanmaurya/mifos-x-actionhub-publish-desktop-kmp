@@ -113,12 +113,12 @@ t = trig[\"workflow_call\"][\"inputs\"][\"target\"]
 assert t.get(\"required\") == True
 assert t.get(\"type\") == \"string\"
 '"
-run_test "T11: workflow_call secrets = expected Azure + MS-Store set" "py '
+run_test "T11: workflow_call secrets = expected Azure + MS-Store (Partner Center + MSIX identity) set" "py '
 import yaml
 d = yaml.safe_load(open(\".github/workflows/release.yaml\"))
 trig = d[\"on\" if \"on\" in d else True]
 got = set(trig[\"workflow_call\"][\"secrets\"].keys())
-exp = set([\"azure_client_id\",\"azure_tenant_id\",\"azure_subscription_id\",\"azure_trusted_signing_endpoint\",\"azure_trusted_signing_account\",\"azure_cert_profile_name\",\"microsoft_store_client_id\",\"microsoft_store_client_secret\"])
+exp = set([\"azure_client_id\",\"azure_tenant_id\",\"azure_subscription_id\",\"azure_trusted_signing_endpoint\",\"azure_trusted_signing_account\",\"azure_cert_profile_name\",\"ms_app_id\",\"ms_partner_center_tenant_id\",\"ms_partner_center_client_id\",\"ms_partner_center_client_secret\",\"windows_msix_identity_name\",\"windows_msix_publisher\",\"windows_msix_publisher_display_name\"])
 assert got == exp, \"diff: \" + str(got.symmetric_difference(exp))
 '"
 run_test "T12: all workflow_call secrets are optional (required:false)" "py '
@@ -247,8 +247,9 @@ run_test "T3x:  windows-microsoft-store (Family B) accepts MS-Partner-Center inp
 import yaml
 d = yaml.safe_load(open(\"windows-microsoft-store/action.yaml\"))
 declared = set(d.get(\"inputs\", {}).keys())
-# Family B contract — MSIX upload to MS Partner Center
-required = set([\"msix_path\",\"ms_partner_center_client_id\",\"ms_app_id\"])
+# Family B contract — the action BUILDS the MSIX (from the desktop module + identity), then uploads
+# it to MS Partner Center. It no longer takes a prebuilt msix_path.
+required = set([\"desktop_package_name\",\"windows_msix_identity_name\",\"windows_msix_publisher\",\"ms_partner_center_client_id\",\"ms_app_id\"])
 assert required.issubset(declared), \"windows-microsoft-store missing Family B inputs: \" + str(required - declared)
 '"
 echo
@@ -256,17 +257,17 @@ echo
 # ── Tier 7: validate-secrets per-target coverage ─────────────────────────────
 echo "── Tier 7: validate-secrets per-target coverage ──"
 run_test "T31: validate-secrets has case branch for linux-deb" \
-    "grep -E 'linux-deb\\)' .github/workflows/release.yaml"
-run_test "T32: validate-secrets case for windows-exe+msi-signed (azure_*)" \
-    "grep -E 'windows-msi-signed\\|windows-exe\\)' .github/workflows/release.yaml"
+    "grep -E '^ +linux-deb(\\|windows-exe)?\\)' .github/workflows/release.yaml"
+run_test "T32: validate-secrets case for windows-msi-signed (azure_*)" \
+    "grep -E '^ +windows-msi-signed\\)' .github/workflows/release.yaml"
 run_test "T33: validate-secrets case for windows-microsoft-store (+ms_store_*)" \
     "grep -E 'windows-microsoft-store\\)' .github/workflows/release.yaml"
-run_test "T34: linux-deb requires no extra secrets (no MISSING+= for it)" "py '
+run_test "T34: linux-deb + unsigned windows-exe require no secrets (no MISSING+= for them)" "py '
 import re
 with open(\".github/workflows/release.yaml\") as f: c = f.read()
-# Find linux-deb case block
-m = re.search(r\"linux-deb\\)(.*?);;\" , c, re.DOTALL)
-assert m and \"MISSING+=\" not in m.group(1), \"linux-deb should not require secrets\"
+# Find the linux-deb case block (shared with the unsigned windows-exe target)
+m = re.search(r\"linux-deb(?:\\|windows-exe)?\\)(.*?);;\" , c, re.DOTALL)
+assert m and \"MISSING+=\" not in m.group(1), \"linux-deb / windows-exe should not require secrets\"
 '"
 echo
 
@@ -354,7 +355,9 @@ echo "── Tier 10: composite-action self-pin consistency (preventive) ──"
 run_test "T38: all composite-action 'uses:' refs in release.yaml use consistent tags + no v2.0.0 freeze when action.yaml changes" "python3 -c '
 import re, sys
 with open(\".github/workflows/release.yaml\") as f:
-    content = f.read()
+    # YAML comments are not refs: release.yaml documents the old dynamic-uses form in a comment,
+    # and counting it made T38 fail on a tag no step uses.
+    content = \"\\n\".join(l for l in f.read().splitlines() if not l.lstrip().startswith(\"#\"))
 pat = re.compile(r\"uses:\\s+therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/[^/]+@(v[0-9.]+)\")
 tags = set(pat.findall(content))
 if len(tags) > 1:

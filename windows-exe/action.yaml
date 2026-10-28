@@ -25,7 +25,7 @@ runs:
     - name: Build EXE installer
       shell: bash
       env: { FLAVOR: '${{ inputs.flavor }}', PKG: '${{ inputs.desktop_package_name }}' }
-      run: ./gradlew ":$PKG:packageReleaseExe" "-PflavorDimension=$FLAVOR"
+      run: ./gradlew ":$PKG:packageReleaseExe" "-PkmpFlavor=$FLAVOR"
 
     - name: Locate + upload + apply stage flags
       shell: bash
@@ -39,5 +39,6 @@ runs:
         set -euo pipefail
         EXE=$(find "$PKG/build/compose/binaries/main-release/exe" -name '*.exe' -type f | head -1)
         [[ -f "$EXE" ]] || { echo "::error::EXE not found"; exit 1; }
+        bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-ensure.sh" "$TAG" "$STAGE"
         gh release upload "$TAG" "$EXE" --clobber
         bash "$GITHUB_ACTION_PATH/../_shared/scripts/common/gh-release-stage.sh" "$TAG" "$STAGE"
