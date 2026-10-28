@@ -354,7 +354,9 @@ echo "── Tier 10: composite-action self-pin consistency (preventive) ──"
 run_test "T38: all composite-action 'uses:' refs in release.yaml use consistent tags + no v2.0.0 freeze when action.yaml changes" "python3 -c '
 import re, sys
 with open(\".github/workflows/release.yaml\") as f:
-    content = f.read()
+    # YAML comments are not refs: release.yaml documents the old dynamic-uses form in a comment,
+    # and counting it made T38 fail on a tag no step uses.
+    content = \"\\n\".join(l for l in f.read().splitlines() if not l.lstrip().startswith(\"#\"))
 pat = re.compile(r\"uses:\\s+therajanmaurya/mifos-x-actionhub-publish-desktop-kmp/[^/]+@(v[0-9.]+)\")
 tags = set(pat.findall(content))
 if len(tags) > 1:
