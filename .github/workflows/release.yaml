@@ -128,6 +128,12 @@ jobs:
     runs-on: ${{ (inputs.target == 'linux-deb') && 'ubuntu-latest' || 'windows-latest' }}
     environment: desktop-${{ inputs.target }}-prerelease
     steps:
+      # Windows' 260-char MAX_PATH breaks checkout of the deep, tracked
+      # cmp-ios/KotlinMultiplatformLinkedPackage/** paths once the repo name is long
+      # (D:\a\<repo>\<repo>\ + 211 chars). Long paths must be on BEFORE checkout.
+      - name: Enable long paths (Windows)
+        if: runner.os == 'Windows'
+        run: git config --system core.longpaths true
       - uses: actions/checkout@v4
 
       - name: Build + sign + upload (linux-deb)
