@@ -55,7 +55,7 @@ in `publish-apple-kmp` (shared Apple Dev Program / Match infra). Targets:
 | Major (`v2.X.X` → `v3.0.0`) | breaking — target removed, secret renamed |
 
 After merging:
-1. Tag `v2.0.{X+1}` on `main`
+1. Tag `v2.0.{X+1}` on `dev` (the only long-lived branch)
 2. Bump orchestrator's `publish-desktop-kmp/.github/workflows/release.yaml@v2.0.{X}` → `@v2.0.{X+1}`
 3. Tag orchestrator patch, bump consumer wrappers
 
