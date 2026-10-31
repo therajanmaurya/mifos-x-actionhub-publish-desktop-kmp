@@ -22,7 +22,7 @@ The existing `publish-desktop-app-kmp@v2.0.0` mixed Mac DMG with Windows/Linux t
 | [`windows-exe/`](./windows-exe/) | windows-latest | Unsigned Windows EXE installer → GitHub Release |
 | [`windows-msi-signed/`](./windows-msi-signed/) | windows-latest | Windows MSI + Azure Trusted Signing → GitHub Release |
 | [`windows-microsoft-store/`](./windows-microsoft-store/) | windows-latest | MSIX submission to Microsoft Store (Partner Center API) |
-| [`linux-deb/`](./linux-deb/) | ubuntu-latest | Linux DEB package → GitHub Release |
+| [`linux-deb/`](./linux-deb/) | ubuntu-26.04 | Linux DEB package → GitHub Release |
 
 ## Promotion ladder (GH Release direct distribution)
 

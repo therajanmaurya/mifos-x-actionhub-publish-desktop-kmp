@@ -9,7 +9,7 @@ on:
 
 jobs:
   actionlint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: docker://rhysd/actionlint:1.7.4
@@ -18,7 +18,7 @@ jobs:
 
   validate-sub-actions:
     name: Validate ${{ matrix.subdir }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       fail-fast: false
       matrix:
@@ -37,14 +37,14 @@ jobs:
           python3 -c "import yaml; yaml.safe_load(open('${{ matrix.subdir }}/action.yaml'))"
 
   validate-shared:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - run: find _shared/scripts -name '*.sh' -exec shellcheck -S warning {} +
 
   workflow-tests:
     name: Workflow E2E tests (43 assertions)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - name: Install actionlint
