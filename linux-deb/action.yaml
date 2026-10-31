@@ -1,6 +1,6 @@
 # Sub-action: linux-deb — Linux DEB package → GitHub Release
 # 🆕 NEW. Was inline `script.sh` in kmp-project-template/deployment/desktop/linux-deb/.
-# Runs on ubuntu-latest. Builds via packageReleaseDeb, uploads to GH Release,
+# Runs on ubuntu-26.04. Builds via packageReleaseDeb, uploads to GH Release,
 # applies stage flags.
 name: 'KMP Publish Desktop — Linux DEB'
 description: 'Build Compose Desktop Linux DEB package + upload to GitHub Release with stage flag flip.'
